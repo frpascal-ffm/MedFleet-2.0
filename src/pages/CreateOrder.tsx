@@ -1,0 +1,578 @@
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { 
+  User, 
+  MapPin, 
+  Clock, 
+  Calendar as CalendarIcon, 
+  Phone, 
+  Shield, 
+  Users, 
+  Repeat, 
+  CheckCircle2,
+  FileText,
+  ArrowLeft,
+  Info,
+  AlertCircle,
+  Plus,
+  Trash2,
+  X,
+  CalendarDays
+} from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
+import DatePicker, { registerLocale } from 'react-datepicker';
+import "react-datepicker/dist/react-datepicker.css";
+import { de } from 'date-fns/locale';
+import { useApp } from '../state/AppContext';
+import { OrderStatus, Requirement } from '../types';
+import { format, parseISO } from 'date-fns';
+
+registerLocale('de', de);
+
+interface RecurringDate {
+  id: string;
+  date: Date;
+  time: string;
+}
+
+const CreateOrder = () => {
+  const { addOrder } = useApp();
+  const navigate = useNavigate();
+  const [formData, setFormData] = useState({
+    patientLabel: '',
+    phone: '',
+    insurance: '',
+    careLevel: 0,
+    date: new Date(),
+    scheduledStartTime: '08:00',
+    pickupAddress: '',
+    dropoffAddress: '',
+    tripType: 'ONE_WAY' as 'ONE_WAY' | 'ROUND_TRIP',
+    returnTime: '',
+    returnTimeUnclear: false,
+    requirements: [] as Requirement[],
+    hasCompanion: false,
+    isRecurring: false,
+    transportSheetPresent: false,
+    notes: ''
+  });
+
+  const [recurringDates, setRecurringDates] = useState<RecurringDate[]>([]);
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    // In a real app, we'd handle recurring dates here (e.g., creating multiple orders)
+    addOrder({
+      ...formData,
+      date: format(formData.date, 'yyyy-MM-dd')
+    });
+    navigate('/auftraege');
+  };
+
+  const toggleRequirement = (req: Requirement) => {
+    setFormData(prev => ({
+      ...prev,
+      requirements: prev.requirements.includes(req)
+        ? prev.requirements.filter(r => r !== req)
+        : [...prev.requirements, req]
+    }));
+  };
+
+  const addRecurringDate = () => {
+    setRecurringDates(prev => [
+      ...prev, 
+      { id: Math.random().toString(36).substr(2, 9), date: new Date(), time: '08:00' }
+    ]);
+  };
+
+  const removeRecurringDate = (id: string) => {
+    setRecurringDates(prev => prev.filter(d => d.id !== id));
+  };
+
+  const updateRecurringDate = (id: string, updates: Partial<RecurringDate>) => {
+    setRecurringDates(prev => prev.map(d => d.id === id ? { ...d, ...updates } : d));
+  };
+
+  // Sync isRecurring with drawer
+  useEffect(() => {
+    if (formData.isRecurring) {
+      if (recurringDates.length === 0) {
+        addRecurringDate();
+      }
+      setIsDrawerOpen(true);
+    }
+  }, [formData.isRecurring]);
+
+  return (
+    <div className="max-w-[1600px] mx-auto relative">
+      {/* Header */}
+      <div className="mb-4 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <button 
+            onClick={() => navigate(-1)}
+            className="p-1.5 hover:bg-white rounded-lg text-slate-500 transition-colors border border-slate-200"
+          >
+            <ArrowLeft size={16} />
+          </button>
+          <h2 className="text-lg font-bold tracking-tight text-slate-900">Neue Fahrt erfassen</h2>
+        </div>
+      </div>
+
+      <form onSubmit={handleSubmit} className="grid grid-cols-1 lg:grid-cols-12 gap-6 pb-20">
+        {/* Left Column: Form Sections */}
+        <div className="lg:col-span-8 space-y-6">
+          
+          {/* Section 1: Patient & Versicherung */}
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="px-5 py-3 border-b border-slate-100 bg-slate-50/50 flex items-center gap-2">
+              <User size={16} className="text-slate-400" />
+              <h3 className="font-bold text-slate-700 text-[11px] uppercase tracking-wider">Patient & Versicherung</h3>
+            </div>
+            <div className="p-5 grid grid-cols-1 md:grid-cols-2 gap-5">
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-slate-500 uppercase">Patientenname</label>
+                <input 
+                  type="text" 
+                  required
+                  className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-emerald-500/10 focus:border-emerald-500 outline-none transition-all text-sm font-medium"
+                  placeholder="Name des Patienten"
+                  value={formData.patientLabel}
+                  onChange={e => setFormData({...formData, patientLabel: e.target.value})}
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-slate-500 uppercase">Telefonnummer</label>
+                <input 
+                  type="tel" 
+                  className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-emerald-500/10 focus:border-emerald-500 outline-none transition-all text-sm font-medium"
+                  placeholder="0123 456789"
+                  value={formData.phone}
+                  onChange={e => setFormData({...formData, phone: e.target.value})}
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-slate-500 uppercase">Krankenkasse</label>
+                <input 
+                  type="text" 
+                  className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-emerald-500/10 focus:border-emerald-500 outline-none transition-all text-sm font-medium"
+                  placeholder="z.B. AOK Nordost"
+                  value={formData.insurance}
+                  onChange={e => setFormData({...formData, insurance: e.target.value})}
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-slate-500 uppercase">Pflegegrad</label>
+                <select 
+                  className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-emerald-500/10 focus:border-emerald-500 outline-none transition-all text-sm font-medium"
+                  value={formData.careLevel}
+                  onChange={e => setFormData({...formData, careLevel: parseInt(e.target.value)})}
+                >
+                  {[0, 1, 2, 3, 4, 5].map(level => (
+                    <option key={level} value={level}>Pflegegrad {level}</option>
+                  ))}
+                </select>
+                {formData.careLevel <= 2 && (
+                  <div className="mt-2 p-2 bg-amber-50 border border-amber-100 rounded-lg flex items-start gap-2">
+                    <AlertCircle size={14} className="text-amber-500 mt-0.5 flex-shrink-0" />
+                    <p className="text-[10px] text-amber-700 font-medium leading-tight">
+                      Hinweis: Bei Pflegegrad 0-2 wird zwingend eine Genehmigung der Krankenkasse benötigt.
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Section 2: Fahrt Details */}
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="px-5 py-3 border-b border-slate-100 bg-slate-50/50 flex items-center gap-2">
+              <MapPin size={16} className="text-slate-400" />
+              <h3 className="font-bold text-slate-700 text-[11px] uppercase tracking-wider">Fahrt Details</h3>
+            </div>
+            <div className="p-5 space-y-5">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase">Datum</label>
+                  <div className="relative custom-datepicker">
+                    <DatePicker
+                      selected={formData.date}
+                      onChange={(date) => setFormData({...formData, date: date || new Date()})}
+                      locale="de"
+                      dateFormat="dd.MM.yyyy"
+                      className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-emerald-500/10 focus:border-emerald-500 outline-none transition-all text-sm font-medium"
+                    />
+                    <CalendarIcon size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase">Abholuhrzeit</label>
+                  <input 
+                    type="time" 
+                    required
+                    className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-emerald-500/10 focus:border-emerald-500 outline-none transition-all text-sm font-medium"
+                    value={formData.scheduledStartTime}
+                    onChange={e => setFormData({...formData, scheduledStartTime: e.target.value})}
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase">Abholort (Von)</label>
+                  <input 
+                    type="text" 
+                    required
+                    className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-emerald-500/10 focus:border-emerald-500 outline-none transition-all text-sm font-medium"
+                    placeholder="Straße, Hausnummer, PLZ Ort"
+                    value={formData.pickupAddress}
+                    onChange={e => setFormData({...formData, pickupAddress: e.target.value})}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase">Zielort (Nach)</label>
+                  <input 
+                    type="text" 
+                    required
+                    className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-emerald-500/10 focus:border-emerald-500 outline-none transition-all text-sm font-medium"
+                    placeholder="Straße, Hausnummer, PLZ Ort"
+                    value={formData.dropoffAddress}
+                    onChange={e => setFormData({...formData, dropoffAddress: e.target.value})}
+                  />
+                </div>
+              </div>
+
+              <div className="flex flex-col md:flex-row gap-5">
+                <div className="flex-1 space-y-2">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase">Fahrt-Typ</label>
+                  <div className="flex gap-2">
+                    <button 
+                      type="button"
+                      onClick={() => setFormData({...formData, tripType: 'ONE_WAY'})}
+                      className={`flex-1 py-1.5 rounded-lg text-[11px] font-bold border transition-all ${
+                        formData.tripType === 'ONE_WAY' 
+                          ? 'bg-emerald-600 text-white border-emerald-600' 
+                          : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'
+                      }`}
+                    >
+                      Einfache Fahrt
+                    </button>
+                    <button 
+                      type="button"
+                      onClick={() => setFormData({...formData, tripType: 'ROUND_TRIP'})}
+                      className={`flex-1 py-1.5 rounded-lg text-[11px] font-bold border transition-all ${
+                        formData.tripType === 'ROUND_TRIP' 
+                          ? 'bg-emerald-600 text-white border-emerald-600' 
+                          : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'
+                      }`}
+                    >
+                      Hin- & Rückfahrt
+                    </button>
+                  </div>
+                </div>
+                {formData.tripType === 'ROUND_TRIP' && (
+                  <div className="flex-1 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[10px] font-bold text-slate-500 uppercase">Rückfahrt</label>
+                      <label className="flex items-center gap-1.5 cursor-pointer">
+                        <input 
+                          type="checkbox" 
+                          className="w-3 h-3 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                          checked={formData.returnTimeUnclear}
+                          onChange={e => setFormData({...formData, returnTimeUnclear: e.target.checked})}
+                        />
+                        <span className="text-[10px] font-medium text-slate-500">Zeit unklar</span>
+                      </label>
+                    </div>
+                    {!formData.returnTimeUnclear && (
+                      <input 
+                        type="time" 
+                        className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-emerald-500/10 focus:border-emerald-500 outline-none transition-all text-sm font-medium"
+                        value={formData.returnTime}
+                        onChange={e => setFormData({...formData, returnTime: e.target.value})}
+                      />
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Section 3: Anforderungen & Sonstiges */}
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="px-5 py-3 border-b border-slate-100 bg-slate-50/50 flex items-center gap-2">
+              <AlertCircle size={16} className="text-slate-400" />
+              <h3 className="font-bold text-slate-700 text-[11px] uppercase tracking-wider">Anforderungen & Sonstiges</h3>
+            </div>
+            <div className="p-5 space-y-5">
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold text-slate-500 uppercase">Transportmittelbedarf</label>
+                <div className="flex flex-wrap gap-2">
+                  {Object.values(Requirement).map(req => (
+                    <button
+                      key={req}
+                      type="button"
+                      onClick={() => toggleRequirement(req)}
+                      className={`px-3 py-1.5 rounded-lg border text-[10px] font-bold transition-all ${
+                        formData.requirements.includes(req)
+                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                          : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300'
+                      }`}
+                    >
+                      {req}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                <label className="flex items-center gap-2 cursor-pointer group">
+                  <input 
+                    type="checkbox"
+                    className="w-4 h-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                    checked={formData.hasCompanion}
+                    onChange={() => setFormData({...formData, hasCompanion: !formData.hasCompanion})}
+                  />
+                  <span className="text-xs font-medium text-slate-700">Begleitperson</span>
+                </label>
+
+                <label className="flex items-center gap-2 cursor-pointer group">
+                  <input 
+                    type="checkbox"
+                    className="w-4 h-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                    checked={formData.isRecurring}
+                    onChange={() => setFormData({...formData, isRecurring: !formData.isRecurring})}
+                  />
+                  <span className="text-xs font-medium text-slate-700">Serienfahrt</span>
+                </label>
+
+                <label className="flex items-center gap-2 cursor-pointer group">
+                  <input 
+                    type="checkbox"
+                    className="w-4 h-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                    checked={formData.transportSheetPresent}
+                    onChange={() => setFormData({...formData, transportSheetPresent: !formData.transportSheetPresent})}
+                  />
+                  <span className="text-xs font-medium text-slate-700">Transportschein liegt vor</span>
+                </label>
+              </div>
+
+              {formData.isRecurring && (
+                <div className="p-3 bg-emerald-50 border border-emerald-100 rounded-lg flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <CalendarDays size={16} className="text-emerald-600" />
+                    <span className="text-xs font-bold text-emerald-900">{recurringDates.length} Termine geplant</span>
+                  </div>
+                  <button 
+                    type="button"
+                    onClick={() => setIsDrawerOpen(true)}
+                    className="text-[10px] font-bold text-emerald-700 hover:underline"
+                  >
+                    Termine bearbeiten
+                  </button>
+                </div>
+              )}
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-slate-500 uppercase">Notizen / Besonderheiten</label>
+                <textarea 
+                  className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-emerald-500/10 focus:border-emerald-500 outline-none transition-all text-sm font-medium min-h-[80px]"
+                  placeholder="Zusätzliche Informationen..."
+                  value={formData.notes}
+                  onChange={e => setFormData({...formData, notes: e.target.value})}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Right Column: Sticky Summary */}
+        <div className="lg:col-span-4">
+          <div className="sticky top-0 space-y-3">
+            <div className="bg-slate-900 rounded-xl shadow-xl overflow-hidden text-white">
+              <div className="px-4 py-2.5 border-b border-slate-800 bg-slate-800/50 flex items-center justify-between">
+                <h3 className="font-bold text-[9px] uppercase tracking-widest text-slate-400">Zusammenfassung</h3>
+                <div className="px-1.5 py-0.5 bg-emerald-500/20 text-emerald-400 rounded text-[8px] font-bold uppercase">Entwurf</div>
+              </div>
+              <div className="p-4 space-y-3">
+                {/* Patient Info */}
+                <div className="flex items-center gap-2.5">
+                  <div className="w-7 h-7 rounded-full bg-slate-800 flex items-center justify-center text-slate-400 flex-shrink-0">
+                    <User size={14} />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-[11px] font-bold truncate">{formData.patientLabel || 'Patient?'}</p>
+                    <p className="text-[9px] text-slate-500 truncate">{formData.insurance || 'Kasse?'}</p>
+                  </div>
+                </div>
+
+                {/* DateTime */}
+                <div className="grid grid-cols-2 gap-2 py-2 border-y border-slate-800">
+                  <div>
+                    <p className="text-[8px] font-bold text-slate-500 uppercase">Datum</p>
+                    <p className="text-[10px] font-medium">{format(formData.date, 'dd.MM.yyyy')}</p>
+                  </div>
+                  <div>
+                    <p className="text-[8px] font-bold text-slate-500 uppercase">Uhrzeit</p>
+                    <p className="text-[10px] font-medium">{formData.scheduledStartTime}</p>
+                  </div>
+                </div>
+
+                {/* Route */}
+                <div className="relative pl-3.5 space-y-2">
+                  <div className="absolute left-1 top-1 bottom-1 w-0.5 bg-slate-800"></div>
+                  <div className="absolute left-0 top-1 w-2 h-2 rounded-full border border-emerald-500 bg-slate-900"></div>
+                  <div className="absolute left-0 bottom-1 w-2 h-2 rounded-full border border-blue-500 bg-slate-900"></div>
+                  
+                  <div>
+                    <p className="text-[8px] font-bold text-slate-500 uppercase">Von</p>
+                    <p className="text-[10px] font-medium truncate leading-tight">{formData.pickupAddress || 'Start...'}</p>
+                  </div>
+                  <div>
+                    <p className="text-[8px] font-bold text-slate-500 uppercase">Nach</p>
+                    <p className="text-[10px] font-medium truncate leading-tight">{formData.dropoffAddress || 'Ziel...'}</p>
+                  </div>
+                </div>
+
+                {/* Recurring Info */}
+                {formData.isRecurring && (
+                  <div className="pt-2 border-t border-slate-800">
+                    <p className="text-[9px] text-emerald-400 font-bold">{recurringDates.length} Termine geplant</p>
+                  </div>
+                )}
+
+                {/* Requirements */}
+                <div className="pt-2 border-t border-slate-800">
+                  <div className="flex flex-wrap gap-1">
+                    {formData.requirements.map(req => (
+                      <span key={req} className="px-1.5 py-0.5 bg-slate-800 text-slate-300 rounded text-[8px] font-bold">{req}</span>
+                    ))}
+                    {formData.hasCompanion && <span className="px-1.5 py-0.5 bg-slate-800 text-slate-300 rounded text-[8px] font-bold">Begleitung</span>}
+                  </div>
+                </div>
+
+                {/* Action */}
+                <div className="pt-2">
+                  <button 
+                    type="submit"
+                    className="w-full py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-bold text-[11px] transition-all shadow-lg shadow-emerald-900/20 flex items-center justify-center gap-2"
+                  >
+                    <CheckCircle2 size={14} />
+                    Fahrt speichern
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-xl border border-slate-200 p-2.5 flex gap-2">
+              <Info size={14} className="text-amber-500 flex-shrink-0" />
+              <p className="text-[9px] text-slate-500 leading-relaxed">
+                Die Fahrt wird nach dem Speichern in der Auftragsliste angezeigt.
+              </p>
+            </div>
+          </div>
+        </div>
+      </form>
+
+      {/* Recurring Dates Drawer */}
+      <AnimatePresence>
+        {isDrawerOpen && (
+          <>
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsDrawerOpen(false)}
+              className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[70]"
+            />
+            <motion.div 
+              initial={{ x: '100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '100%' }}
+              transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+              className="fixed inset-y-0 right-0 w-full max-w-md bg-white shadow-2xl z-[80] flex flex-col"
+            >
+              <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+                <div>
+                  <h3 className="font-bold text-slate-900">Serientermine</h3>
+                  <p className="text-xs text-slate-500">Planen Sie mehrere Fahrten gleichzeitig.</p>
+                </div>
+                <button 
+                  onClick={() => setIsDrawerOpen(false)}
+                  className="p-2 hover:bg-slate-200 rounded-full text-slate-400 transition-colors"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-6">
+                <div className="space-y-3">
+                  <div className="grid grid-cols-12 gap-2 text-[10px] font-bold text-slate-400 uppercase px-2">
+                    <div className="col-span-7">Datum</div>
+                    <div className="col-span-4">Uhrzeit</div>
+                    <div className="col-span-1"></div>
+                  </div>
+                  
+                  {recurringDates.map((rd) => (
+                    <div key={rd.id} className="grid grid-cols-12 gap-2 items-center bg-slate-50 p-2 rounded-lg border border-slate-100">
+                      <div className="col-span-7">
+                        <DatePicker
+                          selected={rd.date}
+                          onChange={(date) => updateRecurringDate(rd.id, { date: date || new Date() })}
+                          locale="de"
+                          dateFormat="dd.MM.yyyy"
+                          className="w-full px-2 py-1.5 bg-white border border-slate-200 rounded text-xs font-medium"
+                        />
+                      </div>
+                      <div className="col-span-4">
+                        <input 
+                          type="time" 
+                          className="w-full px-2 py-1.5 bg-white border border-slate-200 rounded text-xs font-medium"
+                          value={rd.time}
+                          onChange={(e) => updateRecurringDate(rd.id, { time: e.target.value })}
+                        />
+                      </div>
+                      <div className="col-span-1 flex justify-end">
+                        <button 
+                          onClick={() => removeRecurringDate(rd.id)}
+                          className="text-slate-300 hover:text-red-500 transition-colors"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+
+                  <button 
+                    type="button"
+                    onClick={addRecurringDate}
+                    className="w-full py-2 border-2 border-dashed border-slate-200 rounded-lg text-slate-400 hover:text-emerald-600 hover:border-emerald-200 transition-all flex items-center justify-center gap-2 text-xs font-bold"
+                  >
+                    <Plus size={14} />
+                    Termin hinzufügen
+                  </button>
+                </div>
+              </div>
+
+              <div className="p-6 border-t border-slate-100 bg-slate-50">
+                <button 
+                  onClick={() => setIsDrawerOpen(false)}
+                  className="w-full py-3 bg-slate-900 text-white rounded-xl font-bold text-sm hover:bg-slate-800 transition-all"
+                >
+                  Planung übernehmen
+                </button>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+};
+
+export default CreateOrder;
