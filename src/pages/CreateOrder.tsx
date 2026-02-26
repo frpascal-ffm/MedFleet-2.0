@@ -22,7 +22,8 @@ import {
   Plus,
   Trash2,
   X,
-  CalendarDays
+  CalendarDays,
+  ExternalLink
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import DatePicker, { registerLocale } from 'react-datepicker';
@@ -64,14 +65,92 @@ const CreateOrder = () => {
 
   const [recurringDates, setRecurringDates] = useState<RecurringDate[]>([]);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [isGoogleConnected, setIsGoogleConnected] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  useEffect(() => {
+    checkGoogleStatus();
+    
+    const handleMessage = (event: MessageEvent) => {
+      if (event.data?.type === 'GOOGLE_AUTH_SUCCESS') {
+        setIsGoogleConnected(true);
+      }
+    };
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, []);
+
+  const checkGoogleStatus = async () => {
+    try {
+      const res = await fetch('/api/auth/google/status');
+      const data = await res.json();
+      setIsGoogleConnected(data.connected);
+    } catch (error) {
+      console.error('Error checking Google status:', error);
+    }
+  };
+
+  const handleConnectGoogle = async () => {
+    try {
+      const res = await fetch('/api/auth/google/url');
+      const { url } = await res.json();
+      window.open(url, 'google_auth', 'width=600,height=700');
+    } catch (error) {
+      console.error('Error getting Google auth URL:', error);
+    }
+  };
+
+  const syncToCalendar = async (order: any) => {
+    if (!isGoogleConnected) return;
+    try {
+      await fetch('/api/calendar/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ order })
+      });
+    } catch (error) {
+      console.error('Error syncing to calendar:', error);
+      throw error;
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // In a real app, we'd handle recurring dates here (e.g., creating multiple orders)
-    addOrder({
+    
+    // 1. Add the main order
+    const mainOrderData = {
       ...formData,
       date: format(formData.date, 'yyyy-MM-dd')
-    });
+    };
+    addOrder(mainOrderData);
+    
+    // 2. Sync to Google Calendar
+    if (isGoogleConnected) {
+      setIsSyncing(true);
+      try {
+        // Sync main order
+        await syncToCalendar(mainOrderData);
+        
+        // Sync recurring dates if applicable
+        if (formData.isRecurring && recurringDates.length > 0) {
+          for (const rd of recurringDates) {
+            const recurringOrderData = {
+              ...formData,
+              date: format(rd.date, 'yyyy-MM-dd'),
+              scheduledStartTime: rd.time
+            };
+            // Note: In a real app, we'd also call addOrder for each recurring date
+            // but for now we focus on the calendar sync as requested
+            await syncToCalendar(recurringOrderData);
+          }
+        }
+      } catch (error) {
+        console.error('Error during full sync:', error);
+      } finally {
+        setIsSyncing(false);
+      }
+    }
+    
     navigate('/auftraege');
   };
 
@@ -457,13 +536,34 @@ const CreateOrder = () => {
                 </div>
 
                 {/* Action */}
-                <div className="pt-2">
+                <div className="pt-2 space-y-2">
+                  {!isGoogleConnected ? (
+                    <button 
+                      type="button"
+                      onClick={handleConnectGoogle}
+                      className="w-full py-2 bg-white border border-slate-200 text-slate-600 rounded-lg font-bold text-[10px] hover:bg-slate-50 transition-all flex items-center justify-center gap-2"
+                    >
+                      <ExternalLink size={12} />
+                      Google Kalender verbinden
+                    </button>
+                  ) : (
+                    <div className="flex items-center justify-center gap-1.5 py-1.5 bg-emerald-500/10 rounded-lg">
+                      <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></div>
+                      <span className="text-[9px] font-bold text-emerald-500 uppercase tracking-wider">Kalender synchron</span>
+                    </div>
+                  )}
+                  
                   <button 
                     type="submit"
-                    className="w-full py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-bold text-[11px] transition-all shadow-lg shadow-emerald-900/20 flex items-center justify-center gap-2"
+                    disabled={isSyncing}
+                    className="w-full py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-bold text-[11px] transition-all shadow-lg shadow-emerald-900/20 flex items-center justify-center gap-2 disabled:opacity-50"
                   >
-                    <CheckCircle2 size={14} />
-                    Fahrt speichern
+                    {isSyncing ? (
+                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                    ) : (
+                      <CheckCircle2 size={14} />
+                    )}
+                    {isSyncing ? 'Wird synchronisiert...' : 'Fahrt speichern'}
                   </button>
                 </div>
               </div>
