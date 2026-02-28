@@ -13,7 +13,8 @@ import {
   AlertCircle,
   X,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Settings
 } from 'lucide-react';
 import { useApp } from '../state/AppContext';
 import { TransportSheetStatus } from '../types';
@@ -38,6 +39,7 @@ const Sidebar = ({ onClose, isCollapsed, onToggle }: SidebarProps) => {
     { to: '/planung', icon: CalendarDays, label: 'Planung', badge: totalConflicts > 0 ? totalConflicts : undefined, badgeColor: 'bg-red-500' },
     { to: '/auftraege', icon: ClipboardList, label: 'Aufträge' },
     { to: '/transportscheine', icon: FileText, label: 'Transportscheine', badge: criticalSheetsCount > 0 ? criticalSheetsCount : undefined, badgeColor: 'bg-amber-500' },
+    { to: '/einstellungen', icon: Settings, label: 'Einstellungen' },
   ];
 
   return (

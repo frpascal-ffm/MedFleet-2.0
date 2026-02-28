@@ -5,9 +5,9 @@
 
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Search, Plus, Bell, Calendar, Menu } from 'lucide-react';
+import { Search, Plus, Bell, Calendar, Menu, LogOut } from 'lucide-react';
 import { format } from 'date-fns';
-import { de } from 'date-fns/locale';
+import { useApp } from '../state/AppContext';
 
 interface TopbarProps {
   onMenuClick?: () => void;
@@ -15,6 +15,15 @@ interface TopbarProps {
 
 const Topbar = ({ onMenuClick }: TopbarProps) => {
   const [search, setSearch] = useState('');
+  const { isGoogleConnected } = useApp();
+  const [showProfileMenu, setShowProfileMenu] = useState(false);
+
+  // Mock user for UI
+  const user = {
+    name: 'Jan Doseur',
+    email: 'info@fahrdienst-richter.de',
+    picture: 'https://picsum.photos/seed/jan/100/100'
+  };
 
   return (
     <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-4 md:px-8 sticky top-0 z-10">
@@ -60,6 +69,33 @@ const Topbar = ({ onMenuClick }: TopbarProps) => {
           <Plus size={18} />
           <span className="hidden xs:inline">Neu</span>
         </Link>
+
+        {user && (
+          <div className="relative">
+            <button 
+              onClick={() => setShowProfileMenu(!showProfileMenu)}
+              className="w-10 h-10 rounded-full border-2 border-slate-100 overflow-hidden hover:border-emerald-500 transition-all"
+            >
+              <img src={user.picture} alt={user.name} className="w-full h-full object-cover" />
+            </button>
+
+            {showProfileMenu && (
+              <div className="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-xl border border-slate-100 py-2 z-50">
+                <div className="px-4 py-2 border-b border-slate-50 mb-1">
+                  <p className="text-xs font-bold text-slate-900 truncate">{user.name}</p>
+                  <p className="text-[10px] text-slate-500 truncate">{user.email}</p>
+                </div>
+                <button 
+                  onClick={() => setShowProfileMenu(false)}
+                  className="w-full px-4 py-2 text-left text-xs font-medium text-red-600 hover:bg-red-50 flex items-center gap-2 transition-colors"
+                >
+                  <LogOut size={14} />
+                  Abmelden
+                </button>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </header>
   );

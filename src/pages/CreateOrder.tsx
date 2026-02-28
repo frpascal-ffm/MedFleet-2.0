@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   User, 
@@ -31,9 +31,23 @@ import "react-datepicker/dist/react-datepicker.css";
 import { de } from 'date-fns/locale';
 import { useApp } from '../state/AppContext';
 import { OrderStatus, Requirement } from '../types';
-import { format, parseISO } from 'date-fns';
+import { format, parseISO, startOfDay, endOfDay, startOfWeek, getDay } from 'date-fns';
+import { Calendar, dateFnsLocalizer, Views } from 'react-big-calendar';
+import 'react-big-calendar/lib/css/react-big-calendar.css';
 
 registerLocale('de', de);
+
+const locales = {
+  'de': de,
+};
+
+const localizer = dateFnsLocalizer({
+  format,
+  parse: (str: string) => parseISO(str),
+  startOfWeek: () => startOfWeek(new Date(), { locale: de }),
+  getDay: (date: Date) => getDay(date),
+  locales,
+});
 
 interface RecurringDate {
   id: string;
@@ -42,7 +56,15 @@ interface RecurringDate {
 }
 
 const CreateOrder = () => {
-  const { addOrder } = useApp();
+  const { 
+    addOrder, 
+    isGoogleConnected, 
+    checkGoogleStatus, 
+    orders, 
+    assignments, 
+    vehicles, 
+    googleEvents 
+  } = useApp();
   const navigate = useNavigate();
   const [formData, setFormData] = useState({
     patientLabel: '',
@@ -65,40 +87,78 @@ const CreateOrder = () => {
 
   const [recurringDates, setRecurringDates] = useState<RecurringDate[]>([]);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
-  const [isGoogleConnected, setIsGoogleConnected] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
 
   useEffect(() => {
     checkGoogleStatus();
-    
-    const handleMessage = (event: MessageEvent) => {
-      if (event.data?.type === 'GOOGLE_AUTH_SUCCESS') {
-        setIsGoogleConnected(true);
-      }
-    };
-    window.addEventListener('message', handleMessage);
-    return () => window.removeEventListener('message', handleMessage);
-  }, []);
-
-  const checkGoogleStatus = async () => {
-    try {
-      const res = await fetch('/api/auth/google/status');
-      const data = await res.json();
-      setIsGoogleConnected(data.connected);
-    } catch (error) {
-      console.error('Error checking Google status:', error);
-    }
-  };
+  }, [checkGoogleStatus]);
 
   const handleConnectGoogle = async () => {
     try {
       const res = await fetch('/api/auth/google/url');
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || `Server returned ${res.status}`);
+      }
       const { url } = await res.json();
       window.open(url, 'google_auth', 'width=600,height=700');
     } catch (error) {
       console.error('Error getting Google auth URL:', error);
     }
   };
+
+  const calendarEvents = useMemo(() => {
+    const selectedDateStr = format(formData.date, 'yyyy-MM-dd');
+    
+    const internalEvents = assignments.map(assignment => {
+      const order = orders.find(o => o.id === assignment.orderId);
+      if (!order || order.date !== selectedDateStr) return null;
+
+      const [startH, startM] = order.scheduledStartTime.split(':').map(Number);
+      const startDate = new Date(formData.date);
+      startDate.setHours(startH, startM, 0, 0);
+
+      const endDate = new Date(startDate.getTime() + (order.tripDurationMin || 30) * 60000);
+
+      return {
+        id: order.id,
+        title: order.patientLabel,
+        start: startDate,
+        end: endDate,
+        resourceId: assignment.vehicleId,
+        type: 'internal'
+      };
+    }).filter(Boolean);
+
+    const externalEvents = googleEvents.map(ge => {
+      const start = ge.start.dateTime ? new Date(ge.start.dateTime) : new Date(ge.start.date + 'T00:00:00');
+      const end = ge.end.dateTime ? new Date(ge.end.dateTime) : new Date(ge.end.date + 'T23:59:59');
+      
+      if (format(start, 'yyyy-MM-dd') !== selectedDateStr) return null;
+
+      return {
+        id: ge.id,
+        title: ge.summary,
+        start,
+        end,
+        resourceId: 'google-calendar',
+        type: 'google'
+      };
+    }).filter(Boolean);
+
+    return [...internalEvents, ...externalEvents];
+  }, [orders, assignments, googleEvents, formData.date]);
+
+  const resources = useMemo(() => {
+    const base = vehicles.filter(v => v.active).map(v => ({
+      id: v.id,
+      title: v.name,
+    }));
+    if (isGoogleConnected) {
+      base.push({ id: 'google-calendar', title: 'Google' });
+    }
+    return base;
+  }, [vehicles, isGoogleConnected]);
 
   const syncToCalendar = async (order: any) => {
     if (!isGoogleConnected) return;
@@ -465,6 +525,55 @@ const CreateOrder = () => {
                   value={formData.notes}
                   onChange={e => setFormData({...formData, notes: e.target.value})}
                 />
+              </div>
+            </div>
+          </div>
+
+          {/* Section 4: Kalender-Vorschau */}
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="px-5 py-3 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <CalendarIcon size={16} className="text-slate-400" />
+                <h3 className="font-bold text-slate-700 text-[11px] uppercase tracking-wider">Verfügbarkeit prüfen</h3>
+              </div>
+              <span className="text-[10px] font-bold text-slate-400">
+                {format(formData.date, 'EEEE, dd. MMMM yyyy', { locale: de })}
+              </span>
+            </div>
+            <div className="p-0 h-[400px] relative">
+              <Calendar
+                localizer={localizer}
+                events={calendarEvents}
+                startAccessor="start"
+                endAccessor="end"
+                view={Views.DAY}
+                date={formData.date}
+                onNavigate={() => {}} // Controlled by form date
+                toolbar={false}
+                resources={resources}
+                resourceIdAccessor="id"
+                resourceTitleAccessor="title"
+                min={new Date(0, 0, 0, 6, 0, 0)} // Start at 6 AM
+                max={new Date(0, 0, 0, 22, 0, 0)} // End at 10 PM
+                eventPropGetter={(event: any) => ({
+                  style: {
+                    backgroundColor: event.type === 'google' ? '#4285F4' : '#10b981',
+                    borderRadius: '4px',
+                    fontSize: '9px',
+                    border: 'none',
+                    color: 'white'
+                  }
+                })}
+              />
+              <div className="absolute bottom-4 right-4 flex gap-3">
+                <div className="flex items-center gap-1.5 bg-white/90 backdrop-blur px-2 py-1 rounded-md border border-slate-200 shadow-sm">
+                  <div className="w-2 h-2 rounded-full bg-[#10b981]"></div>
+                  <span className="text-[9px] font-bold text-slate-600 uppercase">Intern</span>
+                </div>
+                <div className="flex items-center gap-1.5 bg-white/90 backdrop-blur px-2 py-1 rounded-md border border-slate-200 shadow-sm">
+                  <div className="w-2 h-2 rounded-full bg-[#4285F4]"></div>
+                  <span className="text-[9px] font-bold text-slate-600 uppercase">Google</span>
+                </div>
               </div>
             </div>
           </div>

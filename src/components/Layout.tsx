@@ -4,7 +4,7 @@
  */
 
 import React, { useState } from 'react';
-import { Outlet } from 'react-router-dom';
+import { Outlet, useLocation } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import Topbar from './Topbar';
 import { Menu, X } from 'lucide-react';
@@ -12,6 +12,8 @@ import { Menu, X } from 'lucide-react';
 const Layout = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(true);
+  const location = useLocation();
+  const isPlanningPage = location.pathname === '/planung';
 
   return (
     <div className="flex h-screen bg-slate-50 font-sans text-slate-900 overflow-hidden">
@@ -37,11 +39,13 @@ const Layout = () => {
       </div>
 
       <div className="flex-1 flex flex-col min-w-0">
-        <Topbar 
-          onMenuClick={() => setIsSidebarOpen(true)} 
-        />
-        <main className="flex-1 p-4 md:p-6 overflow-auto">
-          <Outlet />
+        {!isPlanningPage && (
+          <Topbar 
+            onMenuClick={() => setIsSidebarOpen(true)} 
+          />
+        )}
+        <main className={`flex-1 overflow-auto ${isPlanningPage ? 'p-0' : 'p-4 md:p-6'}`}>
+          <Outlet context={{ onMenuClick: () => setIsSidebarOpen(true) }} />
         </main>
       </div>
     </div>

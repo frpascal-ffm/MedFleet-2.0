@@ -91,9 +91,26 @@ export interface Conflict {
   severity: 'error' | 'warning';
 }
 
+export interface GoogleEvent {
+  id: string;
+  summary: string;
+  description?: string;
+  location?: string;
+  start: {
+    dateTime?: string;
+    date?: string;
+  };
+  end: {
+    dateTime?: string;
+    date?: string;
+  };
+}
+
 export interface AppState {
   vehicles: Vehicle[];
   orders: Order[];
   assignments: Assignment[];
   transportSheets: TransportSheet[];
+  googleEvents: GoogleEvent[];
+  isGoogleConnected: boolean;
 }

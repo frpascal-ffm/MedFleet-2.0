@@ -14,8 +14,7 @@ dotenv.config();
 const app = express();
 const PORT = 3000;
 
-app.use(express.json());
-app.use(cookieParser());
+console.log(`[Server] Starting with APP_URL: ${process.env.APP_URL}`);
 
 const oauth2Client = new google.auth.OAuth2(
   process.env.GOOGLE_CLIENT_ID,
@@ -23,23 +22,26 @@ const oauth2Client = new google.auth.OAuth2(
   process.env.GOOGLE_REDIRECT_URI || `${process.env.APP_URL}/auth/google/callback`
 );
 
-// API Routes
-app.get("/api/auth/google/url", (req, res) => {
-  const url = oauth2Client.generateAuthUrl({
-    access_type: "offline",
-    scope: ["https://www.googleapis.com/auth/calendar.events"],
-    prompt: "consent",
-  });
-  res.json({ url });
+app.use(express.json());
+app.use(cookieParser());
+
+// Debug logging
+app.use((req, res, next) => {
+  if (req.url.includes('google')) {
+    console.log(`[Google Auth] ${req.method} ${req.url}`);
+  }
+  next();
 });
 
-app.get("/auth/google/callback", async (req, res) => {
+// Callback route
+app.get(["/auth/google/callback", "/auth/google/callback/"], async (req, res) => {
+  console.log("[Google Auth] Callback received", req.query);
   const { code } = req.query;
   try {
+    if (!code) throw new Error("No code provided");
     const { tokens } = await oauth2Client.getToken(code as string);
     
     // Store tokens in a cookie
-    // SameSite: 'none' and Secure: true are required for iframes
     res.cookie("google_tokens", JSON.stringify(tokens), {
       httpOnly: true,
       secure: true,
@@ -63,17 +65,60 @@ app.get("/auth/google/callback", async (req, res) => {
       </html>
     `);
   } catch (error) {
-    console.error("Error exchanging code for tokens:", error);
-    res.status(500).send("Authentication failed");
+    console.error("[Google Auth] Error exchanging code for tokens:", error);
+    res.status(500).send("Authentication failed: " + (error instanceof Error ? error.message : String(error)));
   }
 });
 
-app.get("/api/auth/google/status", (req, res) => {
-  const tokens = req.cookies.google_tokens;
-  res.json({ connected: !!tokens });
+// Helper to handle API errors
+const handleApiError = (res: express.Response, error: any, message = "Internal Server Error") => {
+  console.error(`${message}:`, error);
+  res.status(500).json({ 
+    error: message, 
+    details: error instanceof Error ? error.message : String(error) 
+  });
+};
+
+// API Routes
+app.get(["/api/auth/google/url", "/api/auth/google/url/"], (req, res) => {
+  try {
+    if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET) {
+      return res.status(500).json({ error: "Google OAuth credentials are not configured in environment variables." });
+    }
+    const url = oauth2Client.generateAuthUrl({
+      access_type: "offline",
+      scope: ["https://www.googleapis.com/auth/calendar.events"],
+      prompt: "consent",
+    });
+    res.json({ url });
+  } catch (error) {
+    handleApiError(res, error, "Failed to generate auth URL");
+  }
 });
 
-app.post("/api/calendar/sync", async (req, res) => {
+app.get(["/api/auth/google/status", "/api/auth/google/status/"], (req, res) => {
+  try {
+    const tokens = req.cookies.google_tokens;
+    res.json({ connected: !!tokens });
+  } catch (error) {
+    handleApiError(res, error, "Failed to check status");
+  }
+});
+
+app.post(["/api/auth/google/logout", "/api/auth/google/logout/"], (req, res) => {
+  try {
+    res.clearCookie("google_tokens", {
+      httpOnly: true,
+      secure: true,
+      sameSite: "none",
+    });
+    res.json({ success: true });
+  } catch (error) {
+    handleApiError(res, error, "Failed to logout");
+  }
+});
+
+app.post(["/api/calendar/sync", "/api/calendar/sync/"], async (req, res) => {
   const tokens = req.cookies.google_tokens;
   if (!tokens) {
     return res.status(401).json({ error: "Not connected to Google Calendar" });
@@ -102,7 +147,6 @@ app.post("/api/calendar/sync", async (req, res) => {
         timeZone: "Europe/Berlin",
       },
       end: {
-        // Assume 1 hour duration if not specified
         dateTime: `${order.date}T${(parseInt(order.scheduledStartTime.split(':')[0]) + 1).toString().padStart(2, '0')}:${order.scheduledStartTime.split(':')[1]}:00`,
         timeZone: "Europe/Berlin",
       },
@@ -115,9 +159,96 @@ app.post("/api/calendar/sync", async (req, res) => {
 
     res.json({ success: true, eventId: response.data.id });
   } catch (error) {
-    console.error("Error creating calendar event:", error);
-    res.status(500).json({ error: "Failed to sync with Google Calendar" });
+    handleApiError(res, error, "Failed to sync with Google Calendar");
   }
+});
+
+app.get(["/api/calendar/events", "/api/calendar/events/"], async (req, res) => {
+  const tokens = req.cookies.google_tokens;
+  if (!tokens) {
+    return res.status(401).json({ error: "Not connected to Google Calendar" });
+  }
+
+  try {
+    const auth = new google.auth.OAuth2(
+      process.env.GOOGLE_CLIENT_ID,
+      process.env.GOOGLE_CLIENT_SECRET
+    );
+    auth.setCredentials(JSON.parse(tokens));
+
+    const calendar = google.calendar({ version: "v3", auth });
+    
+    const timeMin = new Date();
+    timeMin.setDate(timeMin.getDate() - 30);
+    const timeMax = new Date();
+    timeMax.setDate(timeMax.getDate() + 30);
+
+    const response = await calendar.events.list({
+      calendarId: "primary",
+      timeMin: timeMin.toISOString(),
+      timeMax: timeMax.toISOString(),
+      singleEvents: true,
+      orderBy: "startTime",
+    });
+
+    res.json({ events: response.data.items });
+  } catch (error) {
+    handleApiError(res, error, "Failed to fetch Google Calendar events");
+  }
+});
+
+app.patch(["/api/calendar/events/:eventId", "/api/calendar/events/:eventId/"], async (req, res) => {
+  const tokens = req.cookies.google_tokens;
+  if (!tokens) {
+    return res.status(401).json({ error: "Not connected to Google Calendar" });
+  }
+
+  const { eventId } = req.params;
+  const { start, end, summary, location, description } = req.body;
+
+  try {
+    const auth = new google.auth.OAuth2(
+      process.env.GOOGLE_CLIENT_ID,
+      process.env.GOOGLE_CLIENT_SECRET
+    );
+    auth.setCredentials(JSON.parse(tokens));
+
+    const calendar = google.calendar({ version: "v3", auth });
+
+    const response = await calendar.events.patch({
+      calendarId: "primary",
+      eventId,
+      requestBody: {
+        summary,
+        location,
+        description,
+        start: start ? { dateTime: start, timeZone: "Europe/Berlin" } : undefined,
+        end: end ? { dateTime: end, timeZone: "Europe/Berlin" } : undefined,
+      },
+    });
+
+    res.json({ success: true, event: response.data });
+  } catch (error) {
+    handleApiError(res, error, "Failed to update Google Calendar event");
+  }
+});
+
+app.get("/api/health", (req, res) => {
+  res.json({ status: "ok", env: process.env.NODE_ENV, time: new Date().toISOString() });
+});
+
+// Catch-all for API routes to prevent falling through to Vite
+app.all("/api/*", (req, res) => {
+  console.log(`[API] 404 Not Found: ${req.method} ${req.url}`);
+  res.status(404).json({ error: "API route not found" });
+});
+
+// Catch-all for any other routes to see if they reach the server
+app.use((req, res, next) => {
+  if (!req.url.startsWith('/api') && !req.url.includes('.')) {
+    console.log(`[Server] Unmatched request: ${req.method} ${req.url}`);
+  }
+  next();
 });
 
 async function startServer() {
@@ -129,9 +260,15 @@ async function startServer() {
     });
     app.use(vite.middlewares);
   } else {
+    console.log("[Server] Running in production mode");
     app.use(express.static("dist"));
     app.get("*", (req, res) => {
-      res.sendFile("dist/index.html", { root: "." });
+      res.sendFile("dist/index.html", { root: "." }, (err) => {
+        if (err) {
+          console.error("[Server] Error sending dist/index.html:", err);
+          res.status(500).send("Application not built. Please run 'npm run build'.");
+        }
+      });
     });
   }
 

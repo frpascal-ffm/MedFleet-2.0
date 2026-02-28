@@ -30,6 +30,9 @@ interface AppContextType extends AppState {
   reassignOrder: (orderId: string, newVehicleId: string, newIndex: number) => void;
   updateTransportSheet: (orderId: string, updates: Partial<TransportSheet>) => void;
   getConflicts: (vehicleId: string) => Conflict[];
+  fetchGoogleEvents: () => Promise<void>;
+  updateGoogleEvent: (eventId: string, updates: any) => Promise<void>;
+  checkGoogleStatus: () => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -39,6 +42,57 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [orders, setOrders] = useState<Order[]>(MOCK_ORDERS);
   const [assignments, setAssignments] = useState<Assignment[]>(MOCK_ASSIGNMENTS);
   const [transportSheets, setTransportSheets] = useState<TransportSheet[]>(MOCK_TRANSPORT_SHEETS);
+  const [googleEvents, setGoogleEvents] = useState<any[]>([]);
+  const [isGoogleConnected, setIsGoogleConnected] = useState(false);
+
+  const checkGoogleStatus = useCallback(async () => {
+    try {
+      const res = await fetch('/api/auth/google/status');
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || `Server returned ${res.status}`);
+      }
+      const data = await res.json();
+      setIsGoogleConnected(data.connected);
+      if (data.connected) {
+        // Auto-fetch events if connected
+        fetchGoogleEvents();
+      }
+    } catch (err) {
+      console.error('Error checking google status:', err);
+      setIsGoogleConnected(false);
+    }
+  }, []);
+
+  const fetchGoogleEvents = useCallback(async () => {
+    try {
+      const res = await fetch('/api/calendar/events');
+      if (res.ok) {
+        const data = await res.json();
+        setGoogleEvents(data.events || []);
+      } else {
+        const errorData = await res.json().catch(() => ({}));
+        console.error('Failed to fetch google events:', errorData.error || res.statusText);
+      }
+    } catch (err) {
+      console.error('Error fetching google events:', err);
+    }
+  }, []);
+
+  const updateGoogleEvent = useCallback(async (eventId: string, updates: any) => {
+    try {
+      const res = await fetch(`/api/calendar/events/${eventId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates),
+      });
+      if (res.ok) {
+        fetchGoogleEvents(); // Refresh
+      }
+    } catch (err) {
+      console.error('Error updating google event:', err);
+    }
+  }, [fetchGoogleEvents]);
 
   const addOrder = useCallback((newOrderData: Partial<Order>) => {
     const lastId = orders.length > 0 ? Math.max(...orders.map(o => parseInt(o.id))) : 1736000;
@@ -175,13 +229,34 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     orders,
     assignments,
     transportSheets,
+    googleEvents,
+    isGoogleConnected,
     addOrder,
     updateOrder,
     updateAssignment,
     reassignOrder,
     updateTransportSheet,
     getConflicts,
-  }), [vehicles, orders, assignments, transportSheets, addOrder, updateOrder, updateAssignment, reassignOrder, updateTransportSheet, getConflicts]);
+    fetchGoogleEvents,
+    updateGoogleEvent,
+    checkGoogleStatus,
+  }), [
+    vehicles, 
+    orders, 
+    assignments, 
+    transportSheets, 
+    googleEvents, 
+    isGoogleConnected, 
+    addOrder, 
+    updateOrder, 
+    updateAssignment, 
+    reassignOrder, 
+    updateTransportSheet, 
+    getConflicts, 
+    fetchGoogleEvents, 
+    updateGoogleEvent, 
+    checkGoogleStatus
+  ]);
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 };
