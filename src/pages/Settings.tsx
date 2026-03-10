@@ -20,7 +20,8 @@ import {
   Trash2,
   Edit2,
   X,
-  Euro
+  Euro,
+  Info
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useApp } from '../state/AppContext';
@@ -42,6 +43,7 @@ const Settings = () => {
     deleteGkvContract
   } = useApp();
   const [activeTab, setActiveTab] = React.useState('general');
+  const [activePriceTab, setActivePriceTab] = React.useState<'gkv' | 'pkv' | 'privat'>('gkv');
   const [isAddingVehicle, setIsAddingVehicle] = React.useState(false);
   const [newVehicle, setNewVehicle] = React.useState<Partial<Vehicle>>({
     name: '',
@@ -403,9 +405,28 @@ const Settings = () => {
 
           {activeTab === 'prices' && (
             <div className="space-y-6">
-              {/* PKV & Privat Prices */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* PKV */}
+              <div className="flex bg-slate-100 p-1 rounded-xl">
+                <button 
+                  onClick={() => setActivePriceTab('gkv')} 
+                  className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all ${activePriceTab === 'gkv' ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}
+                >
+                  GKV Verträge
+                </button>
+                <button 
+                  onClick={() => setActivePriceTab('pkv')} 
+                  className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all ${activePriceTab === 'pkv' ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}
+                >
+                  PKV Preise
+                </button>
+                <button 
+                  onClick={() => setActivePriceTab('privat')} 
+                  className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all ${activePriceTab === 'privat' ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}
+                >
+                  Privat (Selbstzahler)
+                </button>
+              </div>
+
+              {activePriceTab === 'pkv' && (
                 <section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
                   <div className="p-4 border-b border-slate-100 bg-slate-50/50">
                     <h3 className="font-bold text-slate-900">PKV Preise</h3>
@@ -457,8 +478,9 @@ const Settings = () => {
                     ))}
                   </div>
                 </section>
+              )}
 
-                {/* Privat */}
+              {activePriceTab === 'privat' && (
                 <section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
                   <div className="p-4 border-b border-slate-100 bg-slate-50/50">
                     <h3 className="font-bold text-slate-900">Privat (Selbstzahler)</h3>
@@ -510,9 +532,9 @@ const Settings = () => {
                     ))}
                   </div>
                 </section>
-              </div>
+              )}
 
-              {/* GKV Contracts */}
+              {activePriceTab === 'gkv' && (
               <section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
                 <div className="p-6 border-b border-slate-100 flex items-center justify-between">
                   <div>
@@ -690,11 +712,42 @@ const Settings = () => {
                   )}
                 </div>
               </section>
+              )}
             </div>
           )}
 
+          {activeTab === 'data' && (
+            <section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+              <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-purple-50 rounded-lg">
+                    <Database className="w-5 h-5 text-purple-600" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-slate-900">Datenbank (Supabase)</h3>
+                    <p className="text-xs text-slate-500">Verwalten Sie Ihre Datenbankverbindung.</p>
+                  </div>
+                </div>
+              </div>
+              <div className="p-6 space-y-6">
+                <div className="p-4 bg-slate-50 rounded-xl border border-slate-100 flex gap-3">
+                  <Info className="text-blue-500 flex-shrink-0" size={20} />
+                  <div className="space-y-1">
+                    <p className="text-sm font-bold text-slate-900">Supabase Integration</p>
+                    <p className="text-xs text-slate-500 leading-relaxed">
+                      Um Supabase zu nutzen, müssen Sie die Umgebungsvariablen <code className="bg-slate-200 px-1 rounded">VITE_SUPABASE_URL</code> und <code className="bg-slate-200 px-1 rounded">VITE_SUPABASE_ANON_KEY</code> in den App-Einstellungen hinterlegen.
+                    </p>
+                    <p className="text-xs text-slate-500 leading-relaxed mt-2">
+                      Das Datenbankschema finden Sie in der Datei <code className="bg-slate-200 px-1 rounded">supabase.sql</code> im Hauptverzeichnis. Führen Sie dieses Script im Supabase SQL Editor aus, um die Tabellen zu erstellen.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </section>
+          )}
+
           {/* Other Settings (Placeholders) */}
-          {activeTab !== 'integrations' && activeTab !== 'vehicles' && activeTab !== 'prices' && (
+          {activeTab !== 'integrations' && activeTab !== 'vehicles' && activeTab !== 'prices' && activeTab !== 'data' && (
           <section className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 opacity-50 pointer-events-none">
             <h3 className="font-bold text-slate-900 mb-4">Allgemeine Präferenzen</h3>
             <div className="space-y-4">

@@ -14,9 +14,12 @@ import {
   X,
   ChevronLeft,
   ChevronRight,
-  Settings
+  Settings,
+  LogOut
 } from 'lucide-react';
 import { useApp } from '../state/AppContext';
+import { useSupabase } from '../state/SupabaseContext';
+import { supabase } from '../lib/supabase';
 import { TransportSheetStatus } from '../types';
 
 interface SidebarProps {
@@ -27,6 +30,11 @@ interface SidebarProps {
 
 const Sidebar = ({ onClose, isCollapsed, onToggle }: SidebarProps) => {
   const { transportSheets, assignments, getConflicts, vehicles } = useApp();
+  const { session } = useSupabase();
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+  };
 
   const criticalSheetsCount = transportSheets.filter(
     s => s.status === TransportSheetStatus.FEHLT || s.status === TransportSheetStatus.MUSS_KORRIGIERT_WERDEN
@@ -94,16 +102,29 @@ const Sidebar = ({ onClose, isCollapsed, onToggle }: SidebarProps) => {
         ))}
       </nav>
 
-      <div className="p-4 border-t border-slate-800 overflow-hidden">
+      <div className="p-4 border-t border-slate-800 overflow-hidden space-y-2">
         <div className={`flex items-center gap-3 p-3 rounded-lg bg-slate-800/50 ${isCollapsed ? 'justify-center' : ''}`}>
-          <div className="w-10 h-10 rounded-full bg-slate-700 flex items-center justify-center text-slate-300 font-medium flex-shrink-0">JD</div>
+          <div className="w-10 h-10 rounded-full bg-slate-700 flex items-center justify-center text-slate-300 font-medium flex-shrink-0">
+            {session?.user?.user_metadata?.first_name?.[0] || 'U'}
+            {session?.user?.user_metadata?.last_name?.[0] || ''}
+          </div>
           {!isCollapsed && (
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-white truncate">Jan Doseur</p>
-              <p className="text-xs text-slate-400 truncate">Disponent</p>
+              <p className="text-sm font-medium text-white truncate">
+                {session?.user?.user_metadata?.first_name || 'User'} {session?.user?.user_metadata?.last_name || ''}
+              </p>
+              <p className="text-xs text-slate-400 truncate">{session?.user?.email}</p>
             </div>
           )}
         </div>
+        <button
+          onClick={handleLogout}
+          className={`w-full flex items-center gap-3 p-3 rounded-lg text-slate-400 hover:bg-slate-800 hover:text-white transition-colors ${isCollapsed ? 'justify-center' : ''}`}
+          title={isCollapsed ? 'Abmelden' : ''}
+        >
+          <LogOut size={20} className="flex-shrink-0" />
+          {!isCollapsed && <span className="text-sm font-medium whitespace-nowrap">Abmelden</span>}
+        </button>
       </div>
     </aside>
   );

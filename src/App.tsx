@@ -4,10 +4,11 @@
  */
 
 import React from 'react';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 import { AppProvider } from './state/AppContext';
+import { SupabaseProvider, useSupabase } from './state/SupabaseContext';
 import Layout from './components/Layout';
 import Dashboard from './pages/Dashboard';
 import Planning from './pages/Planning';
@@ -15,24 +16,52 @@ import Orders from './pages/Orders';
 import TransportSheets from './pages/TransportSheets';
 import CreateOrder from './pages/CreateOrder';
 import Settings from './pages/Settings';
+import Login from './pages/Login';
+import Register from './pages/Register';
+
+const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
+  const { session, isLoading, isConnected } = useSupabase();
+
+  if (!isConnected) {
+    return <>{children}</>;
+  }
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+      </div>
+    );
+  }
+
+  if (!session) {
+    return <Navigate to="/login" replace />;
+  }
+
+  return <>{children}</>;
+};
 
 export default function App() {
   return (
-    <AppProvider>
-      <DndProvider backend={HTML5Backend}>
-        <BrowserRouter>
-          <Routes>
-            <Route path="/" element={<Layout />}>
-              <Route index element={<Dashboard />} />
-              <Route path="planung" element={<Planning />} />
-              <Route path="auftraege" element={<Orders />} />
-              <Route path="transportscheine" element={<TransportSheets />} />
-              <Route path="neue-fahrt" element={<CreateOrder />} />
-              <Route path="einstellungen" element={<Settings />} />
-            </Route>
-          </Routes>
-        </BrowserRouter>
-      </DndProvider>
-    </AppProvider>
+    <SupabaseProvider>
+      <AppProvider>
+        <DndProvider backend={HTML5Backend}>
+          <BrowserRouter>
+            <Routes>
+              <Route path="/login" element={<Login />} />
+              <Route path="/register" element={<Register />} />
+              <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
+                <Route index element={<Dashboard />} />
+                <Route path="planung" element={<Planning />} />
+                <Route path="auftraege" element={<Orders />} />
+                <Route path="transportscheine" element={<TransportSheets />} />
+                <Route path="neue-fahrt" element={<CreateOrder />} />
+                <Route path="einstellungen" element={<Settings />} />
+              </Route>
+            </Routes>
+          </BrowserRouter>
+        </DndProvider>
+      </AppProvider>
+    </SupabaseProvider>
   );
 }
