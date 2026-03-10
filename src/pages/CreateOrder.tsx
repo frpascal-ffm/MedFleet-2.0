@@ -63,13 +63,15 @@ const CreateOrder = () => {
     orders, 
     assignments, 
     vehicles, 
-    googleEvents 
+    googleEvents,
+    pricing
   } = useApp();
   const navigate = useNavigate();
   const [formData, setFormData] = useState({
     patientLabel: '',
     phone: '',
     insurance: '',
+    billingType: 'GKV' as 'GKV' | 'PKV' | 'PRIVAT',
     careLevel: 0,
     date: new Date(),
     scheduledStartTime: '08:00',
@@ -248,6 +250,33 @@ const CreateOrder = () => {
     }
   }, [formData.isRecurring]);
 
+  const getTransportCategory = (reqs: Requirement[]) => {
+    if (reqs.includes(Requirement.TRAGESTUHL)) return 'tragestuhl';
+    if (reqs.includes(Requirement.ROLLSTUHL) || reqs.includes(Requirement.ROLLATOR)) return 'rollstuhl';
+    return 'sitzend';
+  };
+
+  const calculatePrice = (priceStructure: { baseFee: number, includedKm: number, pricePerKm: number }, distanceKm: number) => {
+    if (!priceStructure) return 0;
+    const { baseFee, includedKm, pricePerKm } = priceStructure;
+    const extraKm = Math.max(0, distanceKm - includedKm);
+    return baseFee + (extraKm * pricePerKm);
+  };
+
+  const currentCategory = getTransportCategory(formData.requirements);
+  // Assuming an average distance of 15km for preview purposes if no distance is available yet
+  const estimatedDistance = 15; 
+  
+  const pkvPrice = calculatePrice(pricing.pkv[currentCategory], estimatedDistance);
+  const privatPrice = calculatePrice(pricing.privat[currentCategory], estimatedDistance);
+  
+  const matchingGkv = pricing.gkv.find(g => g.insuranceName.toLowerCase() === formData.insurance.toLowerCase());
+  const gkvPriceText = matchingGkv 
+    ? `${calculatePrice(matchingGkv.prices[currentCategory], estimatedDistance).toFixed(2)}€ (${matchingGkv.insuranceName})` 
+    : pricing.gkv.length > 0 
+      ? `${Math.min(...pricing.gkv.map(g => calculatePrice(g.prices[currentCategory], estimatedDistance))).toFixed(2)}€ - ${Math.max(...pricing.gkv.map(g => calculatePrice(g.prices[currentCategory], estimatedDistance))).toFixed(2)}€ (GKV Durchschnitt)`
+      : 'Keine GKV Verträge hinterlegt';
+
   return (
     <div className="max-w-[1600px] mx-auto relative">
       {/* Header */}
@@ -267,6 +296,67 @@ const CreateOrder = () => {
         {/* Left Column: Form Sections */}
         <div className="lg:col-span-8 space-y-6">
           
+          {/* Section 0: Abrechnungsart */}
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="px-5 py-3 border-b border-slate-100 bg-slate-50/50 flex items-center gap-2">
+              <FileText size={16} className="text-slate-400" />
+              <h3 className="font-bold text-slate-700 text-[11px] uppercase tracking-wider">Abrechnungsart</h3>
+            </div>
+            <div className="p-5">
+              <div className="flex flex-col sm:flex-row gap-3">
+                {(['GKV', 'PKV', 'PRIVAT'] as const).map(type => (
+                  <button
+                    key={type}
+                    type="button"
+                    onClick={() => setFormData({...formData, billingType: type})}
+                    className={`flex-1 py-3 rounded-xl text-sm font-bold border-2 transition-all ${
+                      formData.billingType === type
+                        ? 'bg-emerald-50 text-emerald-700 border-emerald-500 shadow-sm'
+                        : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300 hover:bg-slate-50'
+                    }`}
+                  >
+                    {type === 'PRIVAT' ? 'Privat (Selbstzahler)' : type}
+                  </button>
+                ))}
+              </div>
+              
+              <AnimatePresence>
+                {formData.billingType === 'PRIVAT' && (
+                  <motion.div 
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className="overflow-hidden"
+                  >
+                    <div className="p-4 bg-blue-50 border border-blue-100 rounded-xl flex items-start gap-3 mt-4">
+                      <Info size={18} className="text-blue-500 mt-0.5 flex-shrink-0" />
+                      <div className="space-y-1 w-full">
+                        <p className="text-sm font-bold text-blue-900">Preisinformation für Selbstzahler</p>
+                        <p className="text-xs text-blue-700">
+                          Basierend auf dem Transportbedarf (<span className="font-bold capitalize">{currentCategory === 'rollstuhl' ? 'Rollstuhl/Rollator' : currentCategory}</span>):
+                        </p>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-2 pt-2 border-t border-blue-200/50">
+                          <div className="bg-white/60 rounded px-2 py-1.5">
+                            <span className="block text-[10px] uppercase text-blue-600 font-bold">Privat Standard</span>
+                            <span className="font-mono text-sm font-bold text-slate-800">ab {pricing.privat[currentCategory].baseFee}€</span>
+                          </div>
+                          <div className="bg-white/60 rounded px-2 py-1.5">
+                            <span className="block text-[10px] uppercase text-blue-600 font-bold">PKV Vergleich</span>
+                            <span className="font-mono text-sm font-bold text-slate-800">ab {pricing.pkv[currentCategory].baseFee}€</span>
+                          </div>
+                          <div className="bg-white/60 rounded px-2 py-1.5">
+                            <span className="block text-[10px] uppercase text-blue-600 font-bold">GKV Vergleich</span>
+                            <span className="font-mono text-sm font-bold text-slate-800 text-xs">{gkvPriceText}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          </div>
+
           {/* Section 1: Patient & Versicherung */}
           <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
             <div className="px-5 py-3 border-b border-slate-100 bg-slate-50/50 flex items-center gap-2">

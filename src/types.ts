@@ -24,7 +24,6 @@ export enum Requirement {
   ROLLATOR = 'Rollator',
   EINSTIEGSHILFE = 'Einstiegshilfe',
   TRAGESTUHL = 'Tragestuhl',
-  LIEGEND = 'Liegend',
 }
 
 export enum MissingReason {
@@ -39,6 +38,10 @@ export interface Vehicle {
   id: string;
   name: string;
   type?: string;
+  brand?: string;
+  model?: string;
+  licensePlate?: string;
+  equipment?: string[];
   active: boolean;
 }
 
@@ -57,6 +60,7 @@ export interface Order {
   status: OrderStatus;
   requirements: Requirement[];
   insurance?: string;
+  billingType?: 'GKV' | 'PKV' | 'PRIVAT';
   careLevel?: number;
   phone?: string;
   hasCompanion: boolean;
@@ -106,6 +110,30 @@ export interface GoogleEvent {
   };
 }
 
+export interface PriceStructure {
+  baseFee: number;
+  includedKm: number;
+  pricePerKm: number;
+}
+
+export interface TransportPrices {
+  sitzend: PriceStructure;
+  rollstuhl: PriceStructure; // Rollstuhl/Rollator
+  tragestuhl: PriceStructure;
+}
+
+export interface GkvPricing {
+  id: string;
+  insuranceName: string;
+  prices: TransportPrices;
+}
+
+export interface PricingConfig {
+  gkv: GkvPricing[];
+  pkv: TransportPrices;
+  privat: TransportPrices;
+}
+
 export interface AppState {
   vehicles: Vehicle[];
   orders: Order[];
@@ -113,4 +141,5 @@ export interface AppState {
   transportSheets: TransportSheet[];
   googleEvents: GoogleEvent[];
   isGoogleConnected: boolean;
+  pricing: PricingConfig;
 }

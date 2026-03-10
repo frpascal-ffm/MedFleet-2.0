@@ -12,7 +12,10 @@ import {
   TransportSheet, 
   TransportSheetStatus,
   Conflict,
-  OrderStatus
+  OrderStatus,
+  PricingConfig,
+  GkvPricing,
+  TransportPrices
 } from '../types';
 import { 
   MOCK_VEHICLES, 
@@ -26,6 +29,9 @@ import { format } from 'date-fns';
 interface AppContextType extends AppState {
   addOrder: (order: Partial<Order>) => void;
   updateOrder: (orderId: string, updates: Partial<Order>) => void;
+  addVehicle: (vehicle: Partial<Vehicle>) => void;
+  updateVehicle: (vehicleId: string, updates: Partial<Vehicle>) => void;
+  deleteVehicle: (vehicleId: string) => void;
   updateAssignment: (assignmentId: string, updates: Partial<Assignment>) => void;
   reassignOrder: (orderId: string, newVehicleId: string, newIndex: number) => void;
   updateTransportSheet: (orderId: string, updates: Partial<TransportSheet>) => void;
@@ -33,17 +39,45 @@ interface AppContextType extends AppState {
   fetchGoogleEvents: () => Promise<void>;
   updateGoogleEvent: (eventId: string, updates: any) => Promise<void>;
   checkGoogleStatus: () => Promise<void>;
+  updatePricing: (type: 'pkv' | 'privat', prices: TransportPrices) => void;
+  addGkvContract: (contract: Omit<GkvPricing, 'id'>) => void;
+  updateGkvContract: (id: string, updates: Partial<GkvPricing>) => void;
+  deleteGkvContract: (id: string) => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [vehicles] = useState<Vehicle[]>(MOCK_VEHICLES);
+  const [vehicles, setVehicles] = useState<Vehicle[]>(MOCK_VEHICLES);
   const [orders, setOrders] = useState<Order[]>(MOCK_ORDERS);
   const [assignments, setAssignments] = useState<Assignment[]>(MOCK_ASSIGNMENTS);
   const [transportSheets, setTransportSheets] = useState<TransportSheet[]>(MOCK_TRANSPORT_SHEETS);
   const [googleEvents, setGoogleEvents] = useState<any[]>([]);
   const [isGoogleConnected, setIsGoogleConnected] = useState(false);
+  const [pricing, setPricing] = useState<PricingConfig>({
+    gkv: [
+      { id: '1', insuranceName: 'AOK Nordost', prices: { 
+        sitzend: { baseFee: 35, includedKm: 10, pricePerKm: 2.00 }, 
+        rollstuhl: { baseFee: 55, includedKm: 10, pricePerKm: 2.20 }, 
+        tragestuhl: { baseFee: 75, includedKm: 10, pricePerKm: 2.40 } 
+      } },
+      { id: '2', insuranceName: 'Techniker Krankenkasse', prices: { 
+        sitzend: { baseFee: 38, includedKm: 10, pricePerKm: 2.10 }, 
+        rollstuhl: { baseFee: 58, includedKm: 10, pricePerKm: 2.30 }, 
+        tragestuhl: { baseFee: 78, includedKm: 10, pricePerKm: 2.50 } 
+      } }
+    ],
+    pkv: { 
+      sitzend: { baseFee: 50, includedKm: 10, pricePerKm: 2.50 }, 
+      rollstuhl: { baseFee: 80, includedKm: 10, pricePerKm: 2.80 }, 
+      tragestuhl: { baseFee: 100, includedKm: 10, pricePerKm: 3.00 } 
+    },
+    privat: { 
+      sitzend: { baseFee: 60, includedKm: 10, pricePerKm: 2.50 }, 
+      rollstuhl: { baseFee: 90, includedKm: 10, pricePerKm: 2.80 }, 
+      tragestuhl: { baseFee: 110, includedKm: 10, pricePerKm: 3.00 } 
+    }
+  });
 
   const checkGoogleStatus = useCallback(async () => {
     try {
@@ -123,6 +157,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       status: newOrderData.status || OrderStatus.GEPLANT,
       requirements: newOrderData.requirements || [],
       insurance: newOrderData.insurance || '',
+      billingType: newOrderData.billingType || 'GKV',
       careLevel: newOrderData.careLevel || 0,
       phone: newOrderData.phone || '',
       hasCompanion: newOrderData.hasCompanion || false,
@@ -144,6 +179,55 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const updateOrder = useCallback((orderId: string, updates: Partial<Order>) => {
     setOrders(prev => prev.map(o => o.id === orderId ? { ...o, ...updates } : o));
+  }, []);
+
+  const addVehicle = useCallback((newVehicleData: Partial<Vehicle>) => {
+    const newId = `v-${Date.now()}`;
+    const vehicle: Vehicle = {
+      id: newId,
+      name: newVehicleData.name || 'Unbenannt',
+      brand: newVehicleData.brand || '',
+      model: newVehicleData.model || '',
+      licensePlate: newVehicleData.licensePlate || '',
+      equipment: newVehicleData.equipment || [],
+      active: newVehicleData.active !== undefined ? newVehicleData.active : true,
+    };
+    setVehicles(prev => [...prev, vehicle]);
+  }, []);
+
+  const updateVehicle = useCallback((vehicleId: string, updates: Partial<Vehicle>) => {
+    setVehicles(prev => prev.map(v => v.id === vehicleId ? { ...v, ...updates } : v));
+  }, []);
+
+  const deleteVehicle = useCallback((vehicleId: string) => {
+    setVehicles(prev => prev.filter(v => v.id !== vehicleId));
+    // Also remove assignments for this vehicle
+    setAssignments(prev => prev.filter(a => a.vehicleId !== vehicleId));
+  }, []);
+
+  const updatePricing = useCallback((type: 'pkv' | 'privat', prices: TransportPrices) => {
+    setPricing(prev => ({ ...prev, [type]: prices }));
+  }, []);
+
+  const addGkvContract = useCallback((contract: Omit<GkvPricing, 'id'>) => {
+    setPricing(prev => ({
+      ...prev,
+      gkv: [...prev.gkv, { ...contract, id: `gkv-${Date.now()}` }]
+    }));
+  }, []);
+
+  const updateGkvContract = useCallback((id: string, updates: Partial<GkvPricing>) => {
+    setPricing(prev => ({
+      ...prev,
+      gkv: prev.gkv.map(g => g.id === id ? { ...g, ...updates } : g)
+    }));
+  }, []);
+
+  const deleteGkvContract = useCallback((id: string) => {
+    setPricing(prev => ({
+      ...prev,
+      gkv: prev.gkv.filter(g => g.id !== id)
+    }));
   }, []);
 
   const updateAssignment = useCallback((assignmentId: string, updates: Partial<Assignment>) => {
@@ -231,8 +315,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     transportSheets,
     googleEvents,
     isGoogleConnected,
+    pricing,
     addOrder,
     updateOrder,
+    addVehicle,
+    updateVehicle,
+    deleteVehicle,
     updateAssignment,
     reassignOrder,
     updateTransportSheet,
@@ -240,6 +328,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     fetchGoogleEvents,
     updateGoogleEvent,
     checkGoogleStatus,
+    updatePricing,
+    addGkvContract,
+    updateGkvContract,
+    deleteGkvContract,
   }), [
     vehicles, 
     orders, 
@@ -247,15 +339,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     transportSheets, 
     googleEvents, 
     isGoogleConnected, 
+    pricing,
     addOrder, 
     updateOrder, 
+    addVehicle,
+    updateVehicle,
+    deleteVehicle,
     updateAssignment, 
     reassignOrder, 
     updateTransportSheet, 
     getConflicts, 
     fetchGoogleEvents, 
     updateGoogleEvent, 
-    checkGoogleStatus
+    checkGoogleStatus,
+    updatePricing,
+    addGkvContract,
+    updateGkvContract,
+    deleteGkvContract
   ]);
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
