@@ -78,8 +78,9 @@ const CreateOrder = () => {
     pickupAddress: '',
     dropoffAddress: '',
     tripType: 'ONE_WAY' as 'ONE_WAY' | 'ROUND_TRIP',
+    returnMode: 'FIXED' as 'FIXED' | 'OPEN' | 'AUTO_DURATION',
     returnTime: '',
-    returnTimeUnclear: false,
+    onsiteDurationMin: 60,
     requirements: [] as Requirement[],
     hasCompanion: false,
     isRecurring: false,
@@ -184,14 +185,48 @@ const CreateOrder = () => {
       ...formData,
       date: format(formData.date, 'yyyy-MM-dd')
     };
-    addOrder(mainOrderData);
+    const mainOrder = addOrder(mainOrderData);
     
-    // 2. Sync to Google Calendar
+    // 2. Handle Return Ride if ROUND_TRIP
+    let returnOrderData = null;
+    if (formData.tripType === 'ROUND_TRIP') {
+      let calculatedReturnTime = formData.returnTime;
+      
+      if (formData.returnMode === 'AUTO_DURATION' && mainOrder) {
+        // Calculate return time based on arrival time + onsite duration
+        const [arrH, arrM] = mainOrder.plannedArrivalTime.split(':').map(Number);
+        const arrivalDate = new Date();
+        arrivalDate.setHours(arrH, arrM, 0, 0);
+        const returnDate = new Date(arrivalDate.getTime() + formData.onsiteDurationMin * 60000);
+        calculatedReturnTime = format(returnDate, 'HH:mm');
+      } else if (formData.returnMode === 'OPEN') {
+        calculatedReturnTime = 'Offen';
+      }
+
+      returnOrderData = {
+        ...formData,
+        date: format(formData.date, 'yyyy-MM-dd'),
+        scheduledStartTime: calculatedReturnTime,
+        pickupAddress: formData.dropoffAddress,
+        dropoffAddress: formData.pickupAddress,
+        tripType: 'ONE_WAY' as const,
+        notes: `Rückfahrt zu Fahrt ${mainOrder?.id}. ${formData.notes}`
+      };
+      
+      addOrder(returnOrderData);
+    }
+
+    // 3. Sync to Google Calendar
     if (isGoogleConnected) {
       setIsSyncing(true);
       try {
         // Sync main order
         await syncToCalendar(mainOrderData);
+        
+        // Sync return order if exists
+        if (returnOrderData) {
+          await syncToCalendar(returnOrderData);
+        }
         
         // Sync recurring dates if applicable
         if (formData.isRecurring && recurringDates.length > 0) {
@@ -201,9 +236,10 @@ const CreateOrder = () => {
               date: format(rd.date, 'yyyy-MM-dd'),
               scheduledStartTime: rd.time
             };
-            // Note: In a real app, we'd also call addOrder for each recurring date
-            // but for now we focus on the calendar sync as requested
             await syncToCalendar(recurringOrderData);
+            
+            // Note: In a real app, we'd also call addOrder for each recurring date
+            // and handle their return rides as well.
           }
         }
       } catch (error) {
@@ -506,25 +542,38 @@ const CreateOrder = () => {
                 </div>
                 {formData.tripType === 'ROUND_TRIP' && (
                   <div className="flex-1 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <label className="text-[10px] font-bold text-slate-500 uppercase">Rückfahrt</label>
-                      <label className="flex items-center gap-1.5 cursor-pointer">
-                        <input 
-                          type="checkbox" 
-                          className="w-3 h-3 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
-                          checked={formData.returnTimeUnclear}
-                          onChange={e => setFormData({...formData, returnTimeUnclear: e.target.checked})}
-                        />
-                        <span className="text-[10px] font-medium text-slate-500">Zeit unklar</span>
-                      </label>
-                    </div>
-                    {!formData.returnTimeUnclear && (
+                    <label className="text-[10px] font-bold text-slate-500 uppercase">Rückfahrtmodus</label>
+                    <select 
+                      className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-emerald-500/10 focus:border-emerald-500 outline-none transition-all text-sm font-medium"
+                      value={formData.returnMode}
+                      onChange={e => setFormData({...formData, returnMode: e.target.value as any})}
+                    >
+                      <option value="FIXED">Feste Uhrzeit</option>
+                      <option value="OPEN">Offen (Zeit unklar)</option>
+                      <option value="AUTO_DURATION">Automatisch nach Dauer</option>
+                    </select>
+                    
+                    {formData.returnMode === 'FIXED' && (
                       <input 
                         type="time" 
-                        className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-emerald-500/10 focus:border-emerald-500 outline-none transition-all text-sm font-medium"
+                        className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-emerald-500/10 focus:border-emerald-500 outline-none transition-all text-sm font-medium mt-2"
                         value={formData.returnTime}
                         onChange={e => setFormData({...formData, returnTime: e.target.value})}
                       />
+                    )}
+
+                    {formData.returnMode === 'AUTO_DURATION' && (
+                      <div className="mt-2">
+                        <label className="text-[10px] font-bold text-slate-500 uppercase">Dauer vor Ort (Minuten)</label>
+                        <input 
+                          type="number" 
+                          min="0"
+                          step="15"
+                          className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-emerald-500/10 focus:border-emerald-500 outline-none transition-all text-sm font-medium"
+                          value={formData.onsiteDurationMin}
+                          onChange={e => setFormData({...formData, onsiteDurationMin: parseInt(e.target.value) || 0})}
+                        />
+                      </div>
                     )}
                   </div>
                 )}

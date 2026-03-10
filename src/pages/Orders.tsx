@@ -13,20 +13,33 @@ import {
   Clock,
   Truck,
   FileText,
-  Calendar
+  Calendar,
+  Copy
 } from 'lucide-react';
 import { TransportSheetStatus, OrderStatus } from '../types';
 import { format, parseISO } from 'date-fns';
 import { de } from 'date-fns/locale';
+import { generateWhatsappCopyText } from '../utils/whatsapp';
+import { useToast } from '../components/Toast';
 
 const Orders = () => {
   const { orders, assignments, vehicles, transportSheets } = useApp();
   const [filter, setFilter] = useState('');
+  const { showToast } = useToast();
 
   const filteredOrders = orders.filter(o => 
     o.id.toLowerCase().includes(filter.toLowerCase()) || 
     o.patientLabel.toLowerCase().includes(filter.toLowerCase())
   );
+
+  const handleCopyWhatsapp = (order: any) => {
+    const text = generateWhatsappCopyText(order);
+    navigator.clipboard.writeText(text).then(() => {
+      showToast('Fahrt erfolgreich kopiert');
+    }).catch(err => {
+      console.error('Failed to copy text: ', err);
+    });
+  };
 
   return (
     <div className="space-y-6">
@@ -131,9 +144,18 @@ const Orders = () => {
                       </div>
                     </td>
                     <td className="px-4 py-3 text-right">
-                      <button className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded transition-colors opacity-0 group-hover:opacity-100">
-                        <MoreHorizontal size={16} />
-                      </button>
+                      <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button 
+                          onClick={() => handleCopyWhatsapp(order)}
+                          className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-colors"
+                          title="Fahrt kopieren (WhatsApp)"
+                        >
+                          <Copy size={16} />
+                        </button>
+                        <button className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded transition-colors">
+                          <MoreHorizontal size={16} />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 );

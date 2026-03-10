@@ -17,11 +17,14 @@ import {
   ChevronRight,
   Plus,
   ClipboardList,
-  Menu
+  Menu,
+  Copy
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
+import { generateWhatsappCopyText } from '../utils/whatsapp';
+import { useToast } from '../components/Toast';
 
 import 'react-big-calendar/lib/addons/dragAndDrop/styles.css';
 import 'react-big-calendar/lib/css/react-big-calendar.css';
@@ -69,6 +72,7 @@ const Planning: React.FC = () => {
   } = useApp();
   const [view, setView] = useState<View>(Views.DAY);
   const [date, setDate] = useState(new Date());
+  const { showToast } = useToast();
 
   React.useEffect(() => {
     checkGoogleStatus();
@@ -77,6 +81,15 @@ const Planning: React.FC = () => {
   const unassignedOrders = useMemo(() => {
     return orders.filter(order => !assignments.some(a => a.orderId === order.id));
   }, [orders, assignments]);
+
+  const handleCopyWhatsapp = (order: Order) => {
+    const text = generateWhatsappCopyText(order);
+    navigator.clipboard.writeText(text).then(() => {
+      showToast('Fahrt erfolgreich kopiert');
+    }).catch(err => {
+      console.error('Failed to copy text: ', err);
+    });
+  };
 
   const events = useMemo(() => {
     const internalEvents = assignments.map(assignment => {
@@ -263,6 +276,13 @@ const Planning: React.FC = () => {
                   
                   <div className="mt-3 pt-3 border-t border-slate-200 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                     <button 
+                      onClick={() => handleCopyWhatsapp(order)}
+                      className="p-1.5 bg-white border border-slate-200 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors"
+                      title="Fahrt kopieren (WhatsApp)"
+                    >
+                      <Copy size={14} />
+                    </button>
+                    <button 
                       onClick={() => reassignOrder(order.id, vehicles[0].id, 0)}
                       className="flex-1 py-1.5 bg-white border border-slate-200 rounded-lg text-[10px] font-bold text-slate-600 hover:bg-slate-50"
                     >
@@ -401,12 +421,24 @@ const Planning: React.FC = () => {
               culture="de"
               components={{
                 event: ({ event }: any) => (
-                  <div className="flex flex-col h-full overflow-hidden leading-tight">
-                    <div className="font-bold truncate text-[11px]">{event.title}</div>
+                  <div className="flex flex-col h-full overflow-hidden leading-tight group relative">
+                    <div className="font-bold truncate text-[11px] pr-4">{event.title}</div>
                     {event.type === 'internal' && (
-                      <div className="text-[9px] opacity-80 truncate">
-                        {event.order.pickupAddress.split(',')[0]}
-                      </div>
+                      <>
+                        <div className="text-[9px] opacity-80 truncate">
+                          {event.order.pickupAddress.split(',')[0]}
+                        </div>
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleCopyWhatsapp(event.order);
+                          }}
+                          className="absolute top-0 right-0 p-0.5 bg-white/20 hover:bg-white/40 rounded opacity-0 group-hover:opacity-100 transition-opacity"
+                          title="Fahrt kopieren (WhatsApp)"
+                        >
+                          <Copy size={10} />
+                        </button>
+                      </>
                     )}
                     {event.type === 'google' && (
                       <div className="text-[9px] opacity-80 truncate">

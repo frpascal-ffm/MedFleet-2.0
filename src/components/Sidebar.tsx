@@ -15,7 +15,8 @@ import {
   ChevronLeft,
   ChevronRight,
   Settings,
-  LogOut
+  LogOut,
+  Repeat
 } from 'lucide-react';
 import { useApp } from '../state/AppContext';
 import { useSupabase } from '../state/SupabaseContext';
@@ -47,6 +48,7 @@ const Sidebar = ({ onClose, isCollapsed, onToggle }: SidebarProps) => {
     { to: '/planung', icon: CalendarDays, label: 'Planung', badge: totalConflicts > 0 ? totalConflicts : undefined, badgeColor: 'bg-red-500' },
     { to: '/auftraege', icon: ClipboardList, label: 'Aufträge' },
     { to: '/transportscheine', icon: FileText, label: 'Transportscheine', badge: criticalSheetsCount > 0 ? criticalSheetsCount : undefined, badgeColor: 'bg-amber-500' },
+    { to: '/serienfahrten', icon: Repeat, label: 'Serienfahrten' },
     { to: '/einstellungen', icon: Settings, label: 'Einstellungen' },
   ];
 

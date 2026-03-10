@@ -27,7 +27,7 @@ import { timeToMinutes, getRouteEstimate } from '../utils/geoUtils';
 import { format } from 'date-fns';
 
 interface AppContextType extends AppState {
-  addOrder: (order: Partial<Order>) => void;
+  addOrder: (order: Partial<Order>) => Order;
   updateOrder: (orderId: string, updates: Partial<Order>) => void;
   addVehicle: (vehicle: Partial<Vehicle>) => void;
   updateVehicle: (vehicleId: string, updates: Partial<Vehicle>) => void;
