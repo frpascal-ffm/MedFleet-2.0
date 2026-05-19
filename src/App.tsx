@@ -22,24 +22,7 @@ import Register from './pages/Register';
 import SeriesRides from './pages/SeriesRides';
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
-  const { session, isLoading, isConnected } = useSupabase();
-
-  if (!isConnected) {
-    return <>{children}</>;
-  }
-
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
-      </div>
-    );
-  }
-
-  if (!session) {
-    return <Navigate to="/login" replace />;
-  }
-
+  // Auth is temporarily disabled as requested
   return <>{children}</>;
 };
 

@@ -47,14 +47,26 @@ interface AppContextType extends AppState {
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
+const loadFromStorage = <T,>(key: string, defaultValue: T): T => {
+  try {
+    const saved = localStorage.getItem(key);
+    if (saved) {
+      return JSON.parse(saved);
+    }
+  } catch (e) {
+    console.error(`Error loading ${key} from localStorage`, e);
+  }
+  return defaultValue;
+};
+
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [vehicles, setVehicles] = useState<Vehicle[]>(MOCK_VEHICLES);
-  const [orders, setOrders] = useState<Order[]>(MOCK_ORDERS);
-  const [assignments, setAssignments] = useState<Assignment[]>(MOCK_ASSIGNMENTS);
-  const [transportSheets, setTransportSheets] = useState<TransportSheet[]>(MOCK_TRANSPORT_SHEETS);
+  const [vehicles, setVehicles] = useState<Vehicle[]>(() => loadFromStorage('app_vehicles', MOCK_VEHICLES));
+  const [orders, setOrders] = useState<Order[]>(() => loadFromStorage('app_orders', MOCK_ORDERS));
+  const [assignments, setAssignments] = useState<Assignment[]>(() => loadFromStorage('app_assignments', MOCK_ASSIGNMENTS));
+  const [transportSheets, setTransportSheets] = useState<TransportSheet[]>(() => loadFromStorage('app_transportSheets', MOCK_TRANSPORT_SHEETS));
   const [googleEvents, setGoogleEvents] = useState<any[]>([]);
   const [isGoogleConnected, setIsGoogleConnected] = useState(false);
-  const [pricing, setPricing] = useState<PricingConfig>({
+  const [pricing, setPricing] = useState<PricingConfig>(() => loadFromStorage('app_pricing', {
     gkv: [
       { id: '1', insuranceName: 'AOK Nordost', prices: { 
         sitzend: { baseFee: 35, includedKm: 10, pricePerKm: 2.00 }, 
@@ -77,7 +89,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       rollstuhl: { baseFee: 90, includedKm: 10, pricePerKm: 2.80 }, 
       tragestuhl: { baseFee: 110, includedKm: 10, pricePerKm: 3.00 } 
     }
-  });
+  }));
+
+  React.useEffect(() => {
+    localStorage.setItem('app_vehicles', JSON.stringify(vehicles));
+  }, [vehicles]);
+
+  React.useEffect(() => {
+    localStorage.setItem('app_orders', JSON.stringify(orders));
+  }, [orders]);
+
+  React.useEffect(() => {
+    localStorage.setItem('app_assignments', JSON.stringify(assignments));
+  }, [assignments]);
+
+  React.useEffect(() => {
+    localStorage.setItem('app_transportSheets', JSON.stringify(transportSheets));
+  }, [transportSheets]);
+
+  React.useEffect(() => {
+    localStorage.setItem('app_pricing', JSON.stringify(pricing));
+  }, [pricing]);
 
   const checkGoogleStatus = useCallback(async () => {
     try {
